@@ -1,21 +1,15 @@
 import { of, fromPromise, Rejected, Resolved } from 'hyper-async'
 
 export function findAndWriteSeqTxWith({ findSequencerTx, writeSequencerTx, logger }) {
-  function maybeSequencerTx(tx) {
-    return of(tx.id)
-      .chain(fromPromise(findSequencerTx))
-      .bichain(Resolved(tx), Rejected)
-  }
+  const doFindSequencerTx = fromPromise(findSequencerTx)
+  const doWriteSequencerTx = fromPromise(writeSequencerTx)
 
-  function writeTx(tx) {
-    return of(tx.data)
-      .chain(fromPromise(writeSequencerTx))
-  }
+  const maybeSequencerTx = (tx) => doFindSequencerTx(tx.id)
+    .bichain(_ => Resolved(tx), Rejected)
 
-  return (tx) => {
-    return of(tx)
-      .bichain(Rejected, maybeSequencerTx)
-      .bichain(writeTx, Resolved)
-      .map(logger.tap('wrote tx to sequencer'))
-  }
+  const writeTx = (tx) => doWriteSequencerTx(tx.data)
+
+  return (tx) => maybeSequencerTx(tx)
+    .bichain(writeTx, Resolved)
+    .map(logger.tap('wrote tx to sequencer'))
 }
